@@ -1,0 +1,5 @@
+* text eol=lf
+
+# Prevent line endings of image/audio files from being normalized.
+assets/**  -text
+screenshots/** -text

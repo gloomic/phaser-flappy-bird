@@ -2,6 +2,18 @@
 
 An example of Flappy Bird written with Phaser 3. You can take this as a start point to write your own Phaser3 games.
 
+## About it
+
+This example contains multiple versions of the the game Flappy Bird. Every latter version is based on the previous one and add some new features:
+
+- Version 1, a basic version with only about 100 lines of JavaScript code.
+
+The topics involved in the game cover: scenes, sprites, collisions.
+
+The assets used in this project came from the project [Flappy-Bird-Phaser3](https://github.com/geongeorge/Flappy-Bird-Phaser3.git) created by [Geon George](https://github.com/geongeorge).
+
+Phaser version: v3.24.
+
 ## Getting Started
 
 ### Prerequisites
