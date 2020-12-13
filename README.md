@@ -7,6 +7,7 @@ An example of Flappy Bird written with Phaser 3. You can take this as a start po
 This example contains multiple versions of the the game Flappy Bird. Every latter version is based on the previous one and add some new features:
 
 - Version 1, a basic version with only about 100 lines of JavaScript code.
+- Version 2, adds more pipes.
 
 The topics involved in the game cover: scenes, sprites, collisions.
 

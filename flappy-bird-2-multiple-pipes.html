@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Flappy bird 2</title>
+    <script src="lib/phaser.min.js"></script>
+
+    <style type="text/css">
+        body {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+<script type="text/javascript">
+
+class SpaceScene extends Phaser.Scene {
+
+    constructor() {
+        super();
+
+        this.bird;
+        this.pipeGroup;
+        this.scoreText;
+
+        this.pipes;     // All pipes
+        this.pipePool = [null, null];  // Recycled pipes
+        this.leftmostPipeIndex = 0;
+
+        this.score = 0;
+        this.gameOver = false;
+
+        this.pipeWidth = 52;
+        this.pipeGap = 300;
+        this.minPipeHeight = 50;
+        this.holeHeight = 150;
+    }
+
+    preload() {
+        this.load.image('bird', 'assets/images/bird.png');
+        this.load.image('top-pipe', 'assets/images/pipe-top.png');
+        this.load.image('bottom-pipe', 'assets/images/pipe-bottom.png');
+    }
+
+    create() {
+        // Bird
+        this.bird = this.physics.add.sprite(this.cameras.main.centerX,
+            this.cameras.main.centerY, 'bird');
+        this.bird.setGravityY(300);
+        console.log('bird body: %d, %d', this.bird.body.x, this.bird.body.y);
+        this.bird.setCollideWorldBounds(true);
+
+        // Pipes
+        this.pipeGroup = this.physics.add.group();
+
+        // Create pipe pairs that the screen can display at most
+        // and place each of them to the right of the previous pipe pair.
+        let x = this.cameras.main.width;
+        let pipeDistance = this.pipeGap + this.pipeWidth;
+        let maxPipePairCount = Math.floor(
+            (this.cameras.main.width + this.pipeWidth) / pipeDistance) + 1;
+        for (let i = 0; i < maxPipePairCount; i++) {
+            this.createPipes();
+
+            this.placePipes(x);
+            x += pipeDistance;
+        }
+        this.pipes = this.pipeGroup.children.getArray();
+        console.log(this.pipes.length + ' pipes are created');
+
+        // Score text
+        this.scoreText = this.add.text(this.cameras.main.centerX - 50,
+            20, "Score: 0", {font: "30px Arial", fill: "#ffffff"});
+
+        // Collisions event
+        this.physics.add.collider(this.bird, this.pipeGroup, this.hitPipe, null, this);
+
+        // Input and touch event
+        this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+        // Note! Don't ignore the last parameter "this", otherwise it won't work.
+        this.input.keyboard.on('keydown-' + 'SPACE', this.flap, this);
+        this.input.on('pointerdown', this.flap, this);
+    }
+
+    update() {
+        if (this.gameOver) {
+            return;
+        }
+
+        // Update score.
+        // Note: First check score before collect or use p.x instead of
+        // p.body.x in below code, because pipe.x may be reset
+        // but pipe.body.x does not refresh accordingly when collecting it.
+        for (let i = 0; i < this.pipes.length; i += 2) {
+            let p = this.pipes[i];
+            if (p.body.right < this.bird.body.left && !p.scored) {
+                p.scored = true;
+                this.updateScore();
+                console.log('scored: ' + i + ', ' + p.body.x);
+                break;
+            }
+        }
+
+        // Replace the leftmost pipe to rightmost if it leaves the left bound.
+        let pipe = this.pipes[this.leftmostPipeIndex];
+        if (pipe.body.x < -this.pipeWidth) {
+            this.pipePool[0] = pipe;
+            this.pipePool[1] = this.pipes[this.leftmostPipeIndex + 1];
+
+            let count = this.pipes.length;
+            let rightmostPipeIndex = (this.leftmostPipeIndex - 2 + count) % count;
+            let x = this.pipes[rightmostPipeIndex].x + this.pipeWidth + this.pipeGap;
+            console.log('rightmost pipe: ' + this.pipes[rightmostPipeIndex].x);
+            this.placePipes(x);
+            console.log('pipe ' + this.leftmostPipeIndex + ' is collected');
+
+            this.leftmostPipeIndex = (this.leftmostPipeIndex + 2) % count;
+        }
+    }
+
+    createPipes() {
+        this.pipePool[0] = this.pipeGroup.create(0, 0, 'top-pipe').setOrigin(0, 1)
+            .setVelocityX(-200);
+        this.pipePool[1] = this.pipeGroup.create(0, 0, 'bottom-pipe').setOrigin(0, 0)
+            .setVelocityX(-200);
+    }
+
+    placePipes(x) {
+        const holePos = Phaser.Math.Between(this.minPipeHeight,
+            this.cameras.main.height - this.minPipeHeight - this.holeHeight);
+
+        this.pipePool[0].x = x;
+        this.pipePool[0].y = holePos;
+        this.pipePool[0].scored = false;
+        this.pipePool[1].x = x;
+        this.pipePool[1].y = holePos + this.holeHeight;
+    }
+
+    updateScore() {
+        this.score++;
+        this.scoreText.setText('Score: ' + this.score);
+    }
+
+    flap() {
+        if (this.gameOver) {
+            return;
+        }
+
+        this.bird.setVelocityY(-250);
+    }
+
+    hitPipe() {
+        this.gameOver = true;
+        this.physics.pause();
+        console.log('die');
+    }
+}
+
+const config = {
+    type: Phaser.AUTO,
+    backgroundColor: '#71c5cf',
+    width: 800,
+    height: 500,
+    physics: {
+        default: 'arcade',
+        arcade: {
+            debug: false
+        }
+    },
+    scene: SpaceScene
+};
+const game = new Phaser.Game(config);
+
+</script>
+</body>
+</html>
