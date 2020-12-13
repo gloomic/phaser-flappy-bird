@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Flappy bird 4</title>
+    <script src="lib/phaser.min.js"></script>
+
+    <style type="text/css">
+        body {
+            margin: 0;
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+
+<script type="text/javascript">
+
+class Load extends Phaser.Scene {
+     constructor() {
+        super('Load');
+        console.log('new load');
+    }
+
+    preload() {
+        console.log('Load.preload');
+
+        this.load.spritesheet('bird-sprite', 'assets/images/bird-sprite.png',
+            {frameWidth: 34, frameHeight: 24});
+        this.load.image('top-pipe', 'assets/images/pipe-top.png');
+        this.load.image('bottom-pipe', 'assets/images/pipe-bottom.png');
+
+        this.load.audio('flap', 'assets/audio/flap.ogg');
+        this.load.audio('hit', 'assets/audio/hit.ogg');
+        this.load.audio('score', 'assets/audio/score.ogg');
+    }
+
+    create() {
+        this.scene.start('Menu');
+    }
+}
+
+class Menu extends Phaser.Scene {
+    constructor() {
+        super('Menu');
+        console.log('new menu');
+    }
+
+    create() {
+        console.log('menu.create');
+
+        const x = this.cameras.main.centerX;
+        this.add.text(x - 150, 100, 'Flappy Bird',
+            {font: "60px Arial", fill: "#ffffff"});
+        this.add.text(x - 50, 220, 'Start',
+            {font: "40px Arial", fill: "#ffffff"});
+        this.add.text(x - 170, 400, 'Tap or press space to fly',
+            {font: "30px Arial", fill: "#ffffff"});
+
+        this.input.once('pointerdown', () => {
+            this.scene.start('MainGame');
+        }, this);
+
+    }
+}
+
+class MainGame extends Phaser.Scene {
+
+    constructor() {
+        super('MainGame');
+        console.log('new game');
+
+        this.bird;
+        this.pipeGroup;
+        this.scoreText;
+
+        this.pipes;     // All pipes
+        this.pipePool;  // Recycled pipes
+        this.leftmostPipeIndex;
+
+        this.score;
+        this.gameOver;
+
+        this.pipeWidth = 52;
+        this.pipeGap = 250;
+        this.minPipeHeight = 50;
+        this.holeHeight = 150;
+    }
+
+    create() {
+        // Init
+        this.pipePool = [null, null]; // Recycled pipes
+        this.leftmostPipeIndex = 0;
+        this.score = 0;
+        this.gameOver = false;
+
+        const centerX = this.cameras.main.centerX;
+
+        // Bird
+        this.bird = this.physics.add.sprite(centerX,
+            this.cameras.main.centerY, 'bird-sprite');
+        this.bird.setGravityY(300);
+        console.log('bird body: %d, %d', this.bird.body.x, this.bird.body.y);
+        this.bird.setCollideWorldBounds(true);
+
+        this.anims.create({
+            key: 'flap',
+            frames: this.anims.generateFrameNumbers('bird-sprite', {start: 0, end: 2}),
+            frameRate: 10,
+            repeat: 0
+        });
+
+        // Pipes
+        this.pipeGroup = this.physics.add.group();
+
+        // Create pipe pairs that the screen can display at most
+        // and place each of them to the right of the previous pipe pair.
+        let x = this.cameras.main.width;
+        let pipeDistance = this.pipeGap + this.pipeWidth;
+        let maxPipePairCount = Math.floor(
+            (this.cameras.main.width + this.pipeWidth) / pipeDistance) + 1;
+        for (let i = 0; i < maxPipePairCount; i++) {
+            this.createPipes();
+
+            this.placePipes(x);
+            x += pipeDistance;
+        }
+        this.pipes = this.pipeGroup.children.getArray();
+        console.log(this.pipes.length + ' pipes are created');
+
+        // Score text
+        this.scoreText = this.add.text(centerX - 70, 20, "Score: 0",
+            {font: "30px Arial", fill: "#ffffff"});
+
+        // Collisions event
+        this.physics.add.collider(this.bird, this.pipeGroup, this.hitPipe, null, this);
+
+        // Input and touch event
+        this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+        // Note! Don't ignore the last parameter "this", otherwise it won't work.
+        this.input.keyboard.on('keydown-' + 'SPACE', this.flap, this);
+        this.input.on('pointerdown', this.flap, this);
+    }
+
+    update() {
+        if (this.gameOver) {
+            return;
+        }
+
+        // Adjust bird angle, head up if it is moving up, head down otherwise.
+        if (this.bird.body.velocity.y < 0) {
+            if (this.bird.angle > -15) {
+                this.bird.angle--;
+            }
+        } else {
+            if (this.bird.angle < 15) {
+                this.bird.angle++;
+            }
+        }
+
+        // Update score.
+        // Note: First check score before collect or use p.x instead of
+        // p.body.x, because pipe.x may be reset
+        // but pipe.body.x does not refresh accordingly when collecting it.
+        for (let i = 0; i < this.pipes.length; i += 2) {
+            let p = this.pipes[i];
+            if (p.body.right < this.bird.body.left && !p.scored) {
+                p.scored = true;
+                this.updateScore();
+                console.log('scored: ' + i + ', ' + p.body.x);
+                break;
+            }
+        }
+
+        // Replace the leftmost pipe to rightmost if it leaves the left bound.
+        let pipe = this.pipes[this.leftmostPipeIndex];
+        if (pipe.body.x < -this.pipeWidth) {
+            this.pipePool[0] = pipe;
+            this.pipePool[1] = this.pipes[this.leftmostPipeIndex + 1];
+
+            let count = this.pipes.length;
+            let rightmostPipeIndex = (this.leftmostPipeIndex - 2 + count) % count;
+            let x = this.pipes[rightmostPipeIndex].x + this.pipeWidth + this.pipeGap;
+            console.log('rightmost pipe: ' + this.pipes[rightmostPipeIndex].x);
+            this.placePipes(x);
+            console.log('pipe ' + this.leftmostPipeIndex + ' is collected');
+
+            this.leftmostPipeIndex = (this.leftmostPipeIndex + 2) % count;
+        }
+    }
+
+    createPipes() {
+        this.pipePool[0] = this.pipeGroup.create(0, 0, 'top-pipe').setOrigin(0, 1)
+            .setVelocityX(-200);
+        this.pipePool[1] = this.pipeGroup.create(0, 0, 'bottom-pipe').setOrigin(0, 0)
+            .setVelocityX(-200);
+    }
+
+    placePipes(x) {
+        const holePos = Phaser.Math.Between(this.minPipeHeight,
+            this.cameras.main.height - this.minPipeHeight - this.holeHeight);
+
+        this.pipePool[0].x = x;
+        this.pipePool[0].y = holePos;
+        this.pipePool[0].scored = false;
+        this.pipePool[1].x = x;
+        this.pipePool[1].y = holePos + this.holeHeight;
+    }
+
+    updateScore() {
+        this.score++;
+        this.scoreText.setText('Score: ' + this.score);
+        this.sound.play('score');
+    }
+
+    flap() {
+        if (this.gameOver) {
+            return;
+        }
+
+        this.bird.setVelocityY(-250);
+        this.bird.anims.play('flap', true);
+        this.sound.play('flap');
+    }
+
+    hitPipe() {
+        this.gameOver = true;
+        this.sound.play('hit');
+        this.physics.pause();
+        console.log('die');
+
+        let gameOverSign = this.add.text(this.cameras.main.centerX - 150, -200, 'Game Over',
+            {font: "60px Arial", fill: "#ffffff"});
+        this.tweens.add({
+            targets: gameOverSign,
+            y: 150,
+            ease: 'Bounce.easeOut',
+            duration: 1500,
+            onComplete: () => {
+                //restart.visible = true;
+                let restart = this.add.text(this.cameras.main.centerX - 100, 220, 'Press to restart',
+                    {font: "30px Arial", fill: "#ffffff"});
+                this.input.once('pointerdown', () => this.scene.start('MainGame'));
+            }
+        });
+    }
+}
+
+const config = {
+    type: Phaser.AUTO,
+    backgroundColor: '#71c5cf',
+    scale: {
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        width: 800,
+        height: 500
+    },
+    physics: {
+        default: 'arcade',
+        arcade: {
+            debug: false
+        }
+    },
+    scene: [Load, Menu, MainGame]
+};
+const game = new Phaser.Game(config);
+
+</script>
+
+</body>
+</html>
